@@ -1,0 +1,178 @@
+\documentclass[12pt]{article}
+
+\usepackage[margin=0.6in]{geometry}
+\usepackage{setspace}
+\usepackage{amsmath, amssymb}
+
+
+\begin{document}
+	\section{Model Extensions: CHORN}
+	
+	We now describe a set of modifications to the original Harmonic Oscillating Recurrent Network (HORN), yielding the \emph{Cayley Harmonic Oscillating Recurrent Network (CHORN)}. These extensions are designed to (i) enforce structured linear dynamics in the recurrent coupling, (ii) permit heterogeneous oscillator parameters, (iii) introduce a phase-equivariant readout aligned with the intrinsic symmetries of the system and (iv) define a hebbian inspired learning rule for the recurrent weights.
+	
+	\subsection{Heterogeneous Oscillator Parameters}
+	
+	Unlike the original HORN formulation, where oscillator parameters are shared across the reservoir, CHORN allows node-wise heterogeneity. Specifically, we define
+	$$
+	\boldsymbol{\omega} = [\omega_1, \dots, \omega_{n_{\text{res}}}]^\top, 
+	\quad 
+	\boldsymbol{\gamma} = [\gamma_1, \dots, \gamma_{n_{\text{res}}}]^\top,
+	\quad
+	\boldsymbol{\alpha} = [\alpha_1, \dots, \alpha_{n_{\text{res}}}]^\top,
+	$$
+	with all quantities strictly positive. This enables frequency diversity and differential damping across the reservoir, improving expressivity while preserving oscillatory structure.
+	
+	\subsection{Cayley-Parametrised Recurrent Dynamics}
+	
+	In the original HORN model, the recurrent operator is implemented as an unconstrained linear mapping. In CHORN, we instead parameterise the recurrent dynamics via a skew-symmetric generator and the Cayley transform, ensuring norm-preserving linear flow in the absence of damping and forcing.
+	
+	Let
+	$$
+	S \in \mathbb{R}^{n_{\text{res}} \times n_{\text{res}}}, 
+	\quad 
+	A = S - S^\top,
+	$$
+	so that $ A^\top = -A $. The recurrent weight matrix is defined as
+	$$
+	W = (I + A)^{-1}(I - A).
+	$$
+	This construction guarantees that $ W $ is orthogonal whenever $ I + A $ is invertible. The recurrent mapping is then given by
+	$$
+	f^{\text{rec}}(\mathbf{v}) = W \mathbf{v},
+	$$
+	where $ \mathbf{v} \in \mathbb{R}^{n_{\text{res}}} $ denotes the reservoir velocity state.
+	
+	\subsection{Discrete-Time Reservoir Dynamics}
+	
+	Let $ \mathbf{z}(t) \in \mathbb{R}^{n_{\text{res}}} $ denote the reservoir position state and $ \dot{\mathbf{z}}(t) \in \mathbb{R}^{n_{\text{res}}} $ its velocity. Using a symplectic Euler discretisation with step size $ h $, the CHORN dynamics are given by
+	\begin{align*}
+		\dot{\mathbf{z}}(t + h) &= \dot{\mathbf{z}}(t) 
+		+ h \Big(
+		\boldsymbol{\alpha} \odot \tanh\big(
+		f^{\text{in}}(\mathbf{x}(t)) 
+		+ g_{\text{rec}} f^{\text{rec}}(\dot{\mathbf{z}}(t))
+		\big)
+		- \boldsymbol{\omega}^2 \odot \mathbf{z}(t)
+		- 2 \boldsymbol{\gamma} \odot \dot{\mathbf{z}}(t)
+		\Big), \\
+		\mathbf{z}(t + h) &= \mathbf{z}(t) + h \, \dot{\mathbf{z}}(t + h),
+	\end{align*}
+	where $ \odot $ denotes elementwise multiplication and $ g_{\text{rec}} = n_{\text{res}}^{-1/2} $ is a recurrent gain normalisation.
+	
+	\subsection{Phase–Amplitude Coordinates}
+	
+	To expose the intrinsic rotational structure of the dynamics, we introduce the complex-valued change of variables
+	$$
+	\boldsymbol{\zeta}(t) 
+	= \mathbf{z}(t) + i \, \boldsymbol{\omega}^{-1} \odot \dot{\mathbf{z}}(t),
+	$$
+	from which we define node-wise amplitude and phase variables
+	$$
+	r_i(t)^2 = z_i(t)^2 + \frac{\dot{z}_i(t)^2}{\omega_i^2},
+	\quad
+	\theta_i(t) = \tan^{-1}\!\left(\frac{\dot{z}_i(t)}{\omega_i z_i(t)}\right).
+	$$
+	
+	To remove trivial phase rotation induced by intrinsic frequencies, we define the demodulated phase
+	$$
+	\tilde{\theta}_i(t) = \theta_i(t) - \omega_i t.
+	$$
+	
+	\subsection{Phase-Equivariant Readout}
+	
+	The CHORN readout operates on a phase-equivariant feature vector constructed from amplitudes and pairwise phase differences. Specifically, we define
+	$$
+	\boldsymbol{\phi}(t)
+	=
+	\Big[
+	\mathbf{r}(t),
+	\{\cos(\tilde{\theta}_i(t) - \tilde{\theta}_j(t))\}_{i<j},
+	\{\sin(\tilde{\theta}_i(t) - \tilde{\theta}_j(t))\}_{i<j}
+	\Big]^\top
+	\in \mathbb{R}^{n_{\text{phase}}},
+	$$
+	with
+	$$
+	n_{\text{phase}} = n_{\text{res}} + n_{\text{res}}(n_{\text{res}}-1).
+	$$
+	
+	The predicted output is then given by
+	$$
+	\hat{\mathbf{y}}(t) = f^{\text{out}}(\boldsymbol{\phi}(t)),
+	$$
+	where $ f^{\text{out}} $ is a linear mapping. By construction, this readout is invariant under global phase shifts $ \theta_i(t) \mapsto \theta_i(t) + \varphi $, ensuring equivariance to the natural symmetry of the oscillator ensemble.
+	
+	\subsection{Initial Conditions}
+	
+	Rather than zero initial conditions, CHORN initialises the reservoir on the unit circle with evenly spaced phases:
+	$$
+	\theta_i(0) = \frac{2\pi i}{n_{\text{res}}}, 
+	\quad
+	z_i(0) = \cos \theta_i(0), 
+	\quad
+	\dot{z}_i(0) = \sin \theta_i(0),
+	$$
+	optionally perturbed by small stochastic deviations in phase and amplitude. This induces maximal phase diversity at initialisation and accelerates symmetry breaking during transient dynamics.
+	
+	\subsection{Phase-Synchrony Hebbian Learning Rule}
+	
+	In addition to gradient-based optimisation of the readout, CHORN allows for a local Hebbian learning rule acting directly on the recurrent generator $S$. This rule uses phase relationships between oscillators to modify the skew-symmetric coupling structure. Recall the instantaneous phase
+	$$
+	\theta_i(t) 
+	= \tan^{-1}\!\left(\frac{\dot{z}_i(t)}{\omega_i z_i(t)}\right).
+	$$
+	For each ordered pair $(i,j)$, define the phase difference
+	$$
+	\Delta \theta_{ij}(t) 
+	= \theta_i(t) - \theta_j(t).
+	$$
+	The Hebbian interaction signal is
+	$$
+	H_{ij}(t) = \sin\!\big(\Delta \theta_{ij}(t)\big).
+	$$
+	Noticing that
+	$$
+	H_{ij}(t) = - H_{ji}(t),
+	$$
+	so $H(t)$ is skew-symmetric for every $t$ therefore the learning signal crucially preserves the constraint required by the Cayley parametrisation.\\
+	During a forward pass over a sequence of length $T$, the accumulated Hebbian signal is
+	$$
+	\bar{H}_{ij}
+	=
+	\frac{1}{T}
+	\sum_{t=1}^{T}
+	\sin\!\big(\theta_i(t) - \theta_j(t)\big),
+	$$
+	followed by averaging over the batch dimension.\\
+	Thus,
+	$$
+	\bar{H} \in \mathbb{R}^{n_{\text{res}} \times n_{\text{res}}},
+	\quad
+	\bar{H}^\top = -\bar{H}.
+	$$
+	The recurrent operator is defined via the skew-symmetric generator
+	$$
+	A = S - S^\top,
+	\qquad
+	W = (I + A)^{-1}(I - A).
+	$$
+	Rather than updating $W$ directly, we update the underlying parameter $S$ according to
+	$$
+	S \leftarrow S + \eta \, \bar{H},
+	$$
+	where $\eta > 0$ is a Hebbian learning rate.\\
+	Because $\bar{H}$ is skew-symmetric, the induced update on
+	$$
+	A = S - S^\top
+	$$
+	remains skew-symmetric. Consequently, the Cayley transform continues to produce an orthogonal recurrent matrix $W$, preserving norm-controlled linear dynamics.\\
+	The learning rule strengthens directed coupling when oscillator $i$ systematically leads oscillator $j$ in phase:
+	$$
+	\sin(\theta_i - \theta_j) > 0 
+	\quad \Longrightarrow \quad
+	S_{ij} \text{ increases}.
+	$$
+	Conversely, if $j$ leads $i$, the coupling is adjusted in the opposite direction. When oscillators are phase-locked ($\Delta\theta_{ij} \approx 0$ or $\pi$), the update vanishes. It can be interpreted as a continuous-time analogue of spike-timing-dependent plasticity (STDP).
+	
+	
+\end{document}
